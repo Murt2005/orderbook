@@ -6,7 +6,7 @@ Trades OrderBook::AddOrder(OrderPointer order) {
     if (orders_.find(order->GetOrderId()) != orders_.end()) {
         return { };
     }
-    if (order->GetOrderType() == OrderType::FillAndKill && !CanMatch(order->GetSide(), order->GetPrice())) {
+    if (order->GetOrderType() == OrderType::ImmediateOrCancel && !CanMatch(order->GetSide(), order->GetPrice())) {
         return { };
     }
 
@@ -160,10 +160,10 @@ Trades OrderBook::MatchOrders() {
         }
     }
 
-    // Handle Fill-and-Kill orders that couldn't be fully matched
+    // Handle Immediate-Or-Cancel orders that couldn't be fully matched
     std::vector<OrderId> ordersToCancel;
     for (const auto& [orderId, orderEntry] : orders_) {
-        if (orderEntry.order_->GetOrderType() == OrderType::FillAndKill) {
+        if (orderEntry.order_->GetOrderType() == OrderType::ImmediateOrCancel) {
             ordersToCancel.push_back(orderId);
         }
     }

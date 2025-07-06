@@ -7,7 +7,7 @@
 // - FillAndKill: Order is immediately filled or cancelled if it cannot be matched
 enum class OrderType {
     GoodTillCancel,
-    FillAndKill
+    ImmediateOrCancel
 };
 
 // Defines the side of an order (buy or sell).

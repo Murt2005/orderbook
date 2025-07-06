@@ -46,7 +46,7 @@ public:
         testPartialFills();
         testPriceTimePriority();
         testGoodTillCancelOrders();
-        testFillAndKillOrders();
+        testImmediateOrCancelOrders();
         testOrderModification();
         testOrderBookLevels();
         testEdgeCases();
@@ -172,12 +172,12 @@ public:
         assertTrue(orderbook.Size() == 2, "Both GTC orders remain when no match");
     }
 
-    void testFillAndKillOrders() {
+    void testImmediateOrCancelOrders() {
         std::cout << "\n--- Test 7: Fill And Kill Orders ---" << std::endl;
         resetOrderBook();
 
-        auto fakOrder1 = std::make_shared<Order>(OrderType::FillAndKill, 1, Side::Buy, 100, 10);
-        auto trades = orderbook.AddOrder(fakOrder1);
+        auto iocOrder1 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 1, Side::Buy, 100, 10);
+        auto trades = orderbook.AddOrder(iocOrder1);
         
         assertTrue(orderbook.Size() == 0, "FAK order with no match rejected");
         assertTrue(trades.empty(), "No trades from rejected FAK order");
@@ -185,8 +185,8 @@ public:
         auto sellOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Sell, 100, 15);
         orderbook.AddOrder(sellOrder);
 
-        auto fakOrder2 = std::make_shared<Order>(OrderType::FillAndKill, 3, Side::Buy, 100, 10);
-        trades = orderbook.AddOrder(fakOrder2);
+        auto iocOrder2 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 3, Side::Buy, 100, 10);
+        trades = orderbook.AddOrder(iocOrder2);
         
         assertTrue(trades.size() == 1, "FAK order executed");
         assertTrue(orderbook.Size() == 1, "Sell order partially filled, FAK order gone");
@@ -196,8 +196,8 @@ public:
             assertTrue(trades[0].GetAskTrade().quantity_ == 10, "Correct sell quantity traded");
         }
 
-        auto fakOrder3 = std::make_shared<Order>(OrderType::FillAndKill, 4, Side::Buy, 100, 20);
-        trades = orderbook.AddOrder(fakOrder3);
+        auto iocOrder3 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 4, Side::Buy, 100, 20);
+        trades = orderbook.AddOrder(iocOrder3);
         
         assertTrue(trades.size() == 1, "Second FAK order partially executed");
         assertTrue(orderbook.Size() == 0, "Sell order filled, all FAK orders gone");
@@ -211,8 +211,8 @@ public:
         orderbook.AddOrder(sellOrder4);
         assertTrue(orderbook.Size() == 3, "Three sell orders added");
 
-        auto fakOrder4 = std::make_shared<Order>(OrderType:: FillAndKill, 8, Side::Buy, 105, 15);
-        trades = orderbook.AddOrder(fakOrder4);
+        auto iocOrder4 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 8, Side::Buy, 105, 15);
+        trades = orderbook.AddOrder(iocOrder4);
 
         assertTrue(trades.size() == 3, "FAK order matched three price levels");
         assertTrue(orderbook.Size() == 1, "One sell order partially filled remains");
