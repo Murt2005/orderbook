@@ -14,7 +14,7 @@
 // Manages bid and ask orders, handles order matching, and maintains order book state
 // Features:
 // - Price-time priority matching (best price first, then FIFO within price levels)
-// - Support for Good-Till-Cancel (GTC) and Fill-and-Kill (FAK) orders
+// - Support for Good-Till-Cancel (GTC), ImmediateOrCancel (IOC), and FillOrKill (FOK) orders
 // - Order modification throuugh cancel-and-replace semantics
 // - Real-time trade generation and order book level information
 // - Efficient order lookup and management using hash maps and sorted containers
@@ -55,6 +55,9 @@ private:
     // Determines if an incoming order can be matched against existing orders
     // Checks if there are oppposing orders at compatible price levels
     bool CanMatch(Side side, Price price) const;
+
+    // Determines if an order can be completely filled or not
+    bool CanFillCompletely(Side side, Price price, Quantity quantity) const;
 
     // Matching engine that executes trades between compatible orders
     // Implements price-time priority and handles partial fills

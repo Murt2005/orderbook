@@ -9,6 +9,9 @@ Trades OrderBook::AddOrder(OrderPointer order) {
     if (order->GetOrderType() == OrderType::ImmediateOrCancel && !CanMatch(order->GetSide(), order->GetPrice())) {
         return { };
     }
+    if (order->GetOrderType() == OrderType::FillOrKill && !CanFillCompletely(order->GetSide(), order->GetPrice(), order->GetRemainingQuantity())) {
+        return { };
+    }
 
     OrderPointers::iterator iterator;
 
@@ -105,6 +108,37 @@ bool OrderBook::CanMatch(Side side, Price price) const {
     }
 }
 
+bool OrderBook::CanFillCompletely(Side side, Price price, Quantity quantity) const {
+    Quantity availableQuantity = 0;
+
+    if (side == Side::Buy) {
+        for (const auto& [askPrice, orders] : asks_) {
+            if (askPrice > price) {
+                break;
+            }
+            for (const auto& order : orders) {
+                availableQuantity += order->GetRemainingQuantity();
+                if (availableQuantity >= quantity) {
+                    return true;
+                }
+            }
+        }
+    } else {
+        for (const auto& [bidPrice, orders] : bids_) {
+            if (bidPrice < price) {
+                break;
+            }
+            for (const auto& order : orders) {
+                availableQuantity += order->GetRemainingQuantity();
+                if (availableQuantity >= quantity) {
+                    return true;
+                }
+            }
+        }
+    }
+    return availableQuantity >= quantity;
+}
+
 Trades OrderBook::MatchOrders() {
     Trades trades;
     trades.reserve(orders_.size());
@@ -160,10 +194,13 @@ Trades OrderBook::MatchOrders() {
         }
     }
 
-    // Handle Immediate-Or-Cancel orders that couldn't be fully matched
+    // Handle Immediate-Or-Cancel and FillOrKill orders that couldn't be fully matched
     std::vector<OrderId> ordersToCancel;
     for (const auto& [orderId, orderEntry] : orders_) {
-        if (orderEntry.order_->GetOrderType() == OrderType::ImmediateOrCancel) {
+        const auto& order = orderEntry.order_;
+        if (order->GetOrderType() == OrderType::ImmediateOrCancel) {
+            ordersToCancel.push_back(orderId);
+        } else if (order->GetOrderType() == OrderType::FillOrKill) {
             ordersToCancel.push_back(orderId);
         }
     }

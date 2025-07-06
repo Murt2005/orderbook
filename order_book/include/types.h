@@ -4,10 +4,12 @@
 
 // Defines different types of orders supported by the order book.
 // - GoodTillCancel: Order remains active until explicitly cancelled
-// - FillAndKill: Order is immediately filled or cancelled if it cannot be matched
+// - ImmediateOrCancel: Order is immediately filled or cancelled if it cannot be matched, will partially fill
+// - FillOrKill: Order is completely filled immediately or is cancelled
 enum class OrderType {
     GoodTillCancel,
-    ImmediateOrCancel
+    ImmediateOrCancel,
+    FillOrKill
 };
 
 // Defines the side of an order (buy or sell).
