@@ -47,6 +47,7 @@ public:
         testPriceTimePriority();
         testGoodTillCancelOrders();
         testImmediateOrCancelOrders();
+        testFillOrKillOrders();
         testOrderModification();
         testOrderBookLevels();
         testEdgeCases();
@@ -226,8 +227,136 @@ public:
         }
     }
 
+    void testFillOrKillOrders() {
+        std::cout << "\n--- Test 8: FillOrKill Orders ---" << std::endl;
+
+        resetOrderBook();
+
+        // Test 1: FOK Success - Complete Fill
+        auto sellOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Sell, 100, 20);
+        orderbook.AddOrder(sellOrder);
+
+        auto fokBuy = std::make_shared<Order>(OrderType::FillOrKill, 2, Side::Buy, 100, 15);
+        auto trades = orderbook.AddOrder(fokBuy);
+
+        assertTrue(trades.size() == 1, "FOK order executed");
+        assertTrue(orderbook.Size() == 1, "Sell order partially filled");
+        if (!trades.empty()) {
+            assertTrue(trades[0].GetBidTrade().quantity_ == 15, "FOK order fully executed");
+            assertTrue(trades[0].GetAskTrade().quantity_ == 15, "Correct quantity traded from sell order");
+        }
+
+        auto levels = orderbook.GetOrderInfos();
+        if (!levels.GetAsks().empty()) {
+            assertTrue(levels.GetAsks()[0].quantity_ == 5, "Remaining sell quantity correct after FOK");
+        }
+
+        resetOrderBook();
+
+        // Test 2: FOK Rejection - Insufficient Liquidity
+        auto sellOrder1 = std::make_shared<Order>(OrderType::GoodTillCancel, 3, Side::Sell, 100, 10);
+        orderbook.AddOrder(sellOrder1);
+
+        auto fokBuy1 = std::make_shared<Order>(OrderType::FillOrKill, 4, Side::Buy, 100, 15);
+        trades = orderbook.AddOrder(fokBuy1);
+
+        assertTrue(trades.size() == 0, "FOK order rejected due to insufficient liquidity");
+        assertTrue(orderbook.Size() == 1, "Only original sell order left");
+        levels = orderbook.GetOrderInfos();
+        if (!levels.GetAsks().empty()) {
+            assertTrue(levels.GetAsks()[0].quantity_ == 10, "Original sell order unchanged after FOK rejection");
+        }
+    
+        resetOrderBook();
+
+        // Test 3: FOK order across multiple price levels
+        auto sellOrder2a = std::make_shared<Order>(OrderType::GoodTillCancel, 5, Side::Sell, 100, 8);
+        auto sellOrder2b = std::make_shared<Order>(OrderType::GoodTillCancel, 6, Side::Sell, 100, 6);
+        auto sellOrder2c = std::make_shared<Order>(OrderType::GoodTillCancel, 7, Side::Sell, 100, 4);
+
+        orderbook.AddOrder(sellOrder2a);
+        orderbook.AddOrder(sellOrder2b);
+        orderbook.AddOrder(sellOrder2c);
+        assertTrue(orderbook.Size() == 3, "3 sell orders added");
+
+        auto fokBuy2 = std::make_shared<Order>(OrderType::FillOrKill, 8, Side::Buy, 102, 18);
+        trades = orderbook.AddOrder(fokBuy2);
+
+        assertTrue(trades.size() == 3, "FOK order executed 3 trades");
+        assertTrue(orderbook.Size() == 0, "No trades left");
+
+        if (trades.size() >= 3) {
+            Quantity totalTraded = 0;
+            for (const auto& trade : trades) {
+                totalTraded += trade.GetBidTrade().quantity_;
+            }
+            assertTrue(totalTraded == 18, "Total FOK quantity fully executed");
+            }
+    
+        resetOrderBook();
+
+        // Test 4: FOK order with no liquidity
+        auto fokBuy3 = std::make_shared<Order>(OrderType::FillOrKill, 9, Side::Buy, 100, 10);
+        trades = orderbook.AddOrder(fokBuy3);
+
+        assertTrue(trades.empty(), "No trades occur");
+        assertTrue(orderbook.Size() == 0, "No orders in book");
+
+        resetOrderBook();
+
+        // Test 5: FOK Sell Orders
+        auto buyOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 10, Side::Buy, 100, 10);
+        orderbook.AddOrder(buyOrder);
+
+        auto fokSell = std::make_shared<Order>(OrderType::FillOrKill, 11, Side::Sell, 100, 8);
+        trades = orderbook.AddOrder(fokSell);
+
+        assertTrue(trades.size() == 1, "FOK sell order executed");
+        assertTrue(orderbook.Size() == 1, "Buy order still open");
+
+        if (!trades.empty()) {
+            assertTrue(trades[0].GetAskTrade().quantity_ == 8, "FOK sell quantity correct");
+            assertTrue(trades[0].GetBidTrade().quantity_ == 8, "Matching buy quantity correct");
+        }
+    
+        resetOrderBook();
+
+        // Test 6: FOK with price levels not matching
+        auto sellOrder3 = std::make_shared<Order>(OrderType::GoodTillCancel, 12, Side::Sell, 105, 10);
+        orderbook.AddOrder(sellOrder3);
+
+        auto fokBuy4 = std::make_shared<Order>(OrderType::FillOrKill, 13, Side::Buy, 102, 10);
+        trades = orderbook.AddOrder(fokBuy4);
+
+        assertTrue(trades.empty(), "FOK order rejected due to price mismatch");
+        assertTrue(orderbook.Size() == 1, "Original sell order unchanged");
+    
+        resetOrderBook();
+
+        // Test 7: Large FOK order
+        for (int i = 0; i < 5; ++i) {
+            auto sellOrder4 = std::make_shared<Order>(OrderType::GoodTillCancel, 22 + i, Side::Sell, 100 + i, 10);
+            orderbook.AddOrder(sellOrder4);
+        }
+        assertTrue(orderbook.Size() == 5, "Five sell orders added");
+        
+        auto largeFOK = std::make_shared<Order>(OrderType::FillOrKill, 27, Side::Buy, 104, 50);
+        trades = orderbook.AddOrder(largeFOK);
+        
+        assertTrue(trades.size() == 5, "Large FOK order executed across all levels");
+        assertTrue(orderbook.Size() == 0, "All orders filled");
+        
+        if (trades.size() >= 5) {
+            Quantity totalTraded = 0;
+            for (const auto& trade : trades) {
+                totalTraded += trade.GetBidTrade().quantity_;
+            }
+            assertTrue(totalTraded == 50, "Complete large FOK quantity executed");
+        }
+    }
+
     void testOrderModification() {
-        std::cout << "\n--- Test 8: Order Modification ---" << std::endl;
+        std::cout << "\n--- Test 9: Order Modification ---" << std::endl;
         resetOrderBook();
 
         auto originalOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
@@ -248,7 +377,7 @@ public:
     }
 
     void testOrderBookLevels() {
-        std::cout << "\n--- Test 9: OrderBook Levels ---" << std::endl;
+        std::cout << "\n--- Test 10: OrderBook Levels ---" << std::endl;
         resetOrderBook();
 
         orderbook.AddOrder(std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10));
@@ -271,7 +400,7 @@ public:
     }
 
     void testEdgeCases() {
-        std::cout << "\n--- Test 10: Edge Cases ---" << std::endl;
+        std::cout << "\n--- Test 11: Edge Cases ---" << std::endl;
         resetOrderBook();
 
         auto order1 = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
