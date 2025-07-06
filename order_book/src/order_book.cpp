@@ -112,14 +112,21 @@ Trades OrderBook::MatchOrders() {
         if (bids_.empty() || asks_.empty()) {
             break;
         }
-        auto& [bidPrice, bids] = *bids_.begin();
-        auto& [askPrice, asks] = *asks_.begin();
-
+        
+        auto bidsIt = bids_.begin();
+        auto asksIt = asks_.begin();
+        
+        Price bidPrice = bidsIt->first;
+        Price askPrice = asksIt->first;
+        
         if (bidPrice < askPrice) {
             break;
         }
 
-        while (bids.size() && asks.size()) {
+        auto& bids = bidsIt->second;
+        auto& asks = asksIt->second;
+
+        while (!bids.empty() && !asks.empty()) {
             auto& bid = bids.front();
             auto& ask = asks.front();
 
@@ -128,45 +135,41 @@ Trades OrderBook::MatchOrders() {
             bid->Fill(quantity);
             ask->Fill(quantity);
 
-            if (bid->IsFilled()) {
-                bids.pop_front();
-                orders_.erase(bid->GetOrderId());
-            }
-
-            if (ask->IsFilled()) {
-                asks.pop_front();
-                orders_.erase(ask->GetOrderId());
-            }
-
-            if (bids.empty()) {
-                bids_.erase(bidPrice);
-            }
-
-            if (asks.empty()) {
-                asks_.erase(askPrice);
-            }
-
             trades.push_back(Trade{
                 TradeInfo{ bid->GetOrderId(), bid->GetPrice(), quantity },
                 TradeInfo{ ask->GetOrderId(), ask->GetPrice(), quantity }
-                });
+            });
+
+            if (bid->IsFilled()) {
+                orders_.erase(bid->GetOrderId());
+                bids.pop_front();
+            }
+
+            if (ask->IsFilled()) {
+                orders_.erase(ask->GetOrderId());
+                asks.pop_front();
+            }
+        }
+
+        if (bids.empty()) {
+            bids_.erase(bidPrice);
+        }
+        if (asks.empty()) {
+            asks_.erase(askPrice);
         }
     }
 
     // Handle Fill-and-Kill orders that couldn't be fully matched
-    if (!bids_.empty()) {
-        auto& [_, bids] = *bids_.begin();
-        auto& order = bids.front();
-        if (order->GetOrderType() == OrderType::FillAndKill) {
-            CancelOrder(order->GetOrderId());
+    std::vector<OrderId> ordersToCancel;
+    for (const auto& [orderId, orderEntry] : orders_) {
+        if (orderEntry.order_->GetOrderType() == OrderType::FillAndKill) {
+            ordersToCancel.push_back(orderId);
         }
     }
-    if (!asks_.empty()) {
-        auto& [_, asks] = *asks_.begin();
-        auto& order = asks.front();
-        if (order->GetOrderType() == OrderType::FillAndKill) {
-            CancelOrder(order->GetOrderId());
-        }
+    
+    for (OrderId orderId : ordersToCancel) {
+        CancelOrder(orderId);
     }
+
     return trades;
 }
