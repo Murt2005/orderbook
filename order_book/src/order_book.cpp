@@ -59,8 +59,9 @@ Trades OrderBook::MatchOrder(OrderModify order) {
         return { };
     }
     const auto& [existingOrder, _] = orders_.at(order.GetOrderId());
+    OrderType orderType = existingOrder->GetOrderType();
     CancelOrder(order.GetOrderId());
-    return AddOrder(order.ToOrderPointer(existingOrder->GetOrderType()));
+    return AddOrder(order.ToOrderPointer(orderType));
 }
 
 std::size_t OrderBook::Size() const { return orders_.size(); }
