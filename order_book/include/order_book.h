@@ -5,6 +5,7 @@
 #include "order_modify.h"
 #include "trade.h"
 #include "order_book_level_infos.h"
+#include "performance_tracker.h"
 #include <map>
 #include <unordered_map>
 #include <functional>
@@ -39,6 +40,13 @@ public:
     // Aggregates orders by price level and returns bid/ask information
     OrderBookLevelInfos GetOrderInfos() const;
 
+    // Performance tracking methods
+    void enablePerformanceTracking(bool enabled) { performanceTracker_.setEnabled(enabled); }
+    bool isPerformanceTrackingEnabled() const { return performanceTracker_.isEnabled(); }
+    void resetPerformanceMetrics() { performanceTracker_.reset(); }
+    void printPerformanceReport() const { performanceTracker_.printReport(); }
+    void printPerformanceSummary() const { performanceTracker_.printSummary(); }
+
 private:
     // Links and order to its position in the price level queue
     // Used for efficient order cancellation and modification
@@ -63,4 +71,7 @@ private:
     // Implements price-time priority and handles partial fills
     // Returns a vector of all trades executed during the matching process
     Trades MatchOrders();
+
+    // Performance tracker instance
+    mutable PerformanceTracker performanceTracker_;
 };

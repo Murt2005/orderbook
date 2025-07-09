@@ -3,24 +3,31 @@
 #include <numeric>
 
 Trades OrderBook::AddOrder(OrderPointer order) {
-    // Input validation
+    auto startTime = performanceTracker_.startTimer();
+    
     if (!order) {
+        performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
     }
     if (order->GetRemainingQuantity() == 0) {
-        return { }; // Reject zero quantity orders
+        performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
+        return { };
     }
     if (order->GetOrderId() == 0) {
-        return { }; // Reject invalid order ID
+        performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
+        return { };
     }
     
     if (orders_.find(order->GetOrderId()) != orders_.end()) {
+        performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
     }
     if (order->GetOrderType() == OrderType::ImmediateOrCancel && !CanMatch(order->GetSide(), order->GetPrice())) {
+        performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
     }
     if (order->GetOrderType() == OrderType::FillOrKill && !CanFillCompletely(order->GetSide(), order->GetPrice(), order->GetRemainingQuantity())) {
+        performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
     }
 
@@ -39,12 +46,17 @@ Trades OrderBook::AddOrder(OrderPointer order) {
 
     orders_.insert({ order->GetOrderId(), OrderEntry{ order, iterator } });
 
-    return MatchOrders();
+    auto trades = MatchOrders();
+    performanceTracker_.recordOperation("AddOrder_Success", startTime, 1);
+    return trades;
 }
 
 void OrderBook::CancelOrder(OrderId orderId) {
+    auto startTime = performanceTracker_.startTimer();
+    
     auto orderIt = orders_.find(orderId);
     if (orderIt == orders_.end()) {
+        performanceTracker_.recordOperation("CancelOrder_NotFound", startTime, 0);
         return;
     }
 
@@ -73,22 +85,35 @@ void OrderBook::CancelOrder(OrderId orderId) {
         }
     }
     orders_.erase(orderId);
+    performanceTracker_.recordOperation("CancelOrder_Success", startTime, 1);
 }
 
 Trades OrderBook::MatchOrder(OrderModify order) {
+    auto startTime = performanceTracker_.startTimer();
+    
     auto orderIt = orders_.find(order.GetOrderId());
     if (orderIt == orders_.end()) {
+        performanceTracker_.recordOperation("MatchOrder_NotFound", startTime, 0);
         return { };
     }
     const auto& [existingOrder, _] = orderIt->second;
     OrderType orderType = existingOrder->GetOrderType();
     CancelOrder(order.GetOrderId());
-    return AddOrder(order.ToOrderPointer(orderType));
+    auto trades = AddOrder(order.ToOrderPointer(orderType));
+    performanceTracker_.recordOperation("MatchOrder_Success", startTime, 1);
+    return trades;
 }
 
-std::size_t OrderBook::Size() const { return orders_.size(); }
+std::size_t OrderBook::Size() const { 
+    auto startTime = performanceTracker_.startTimer();
+    auto size = orders_.size();
+    performanceTracker_.recordOperation("Size", startTime, 0);
+    return size;
+}
 
 OrderBookLevelInfos OrderBook::GetOrderInfos() const {
+    auto startTime = performanceTracker_.startTimer();
+    
     LevelInfos bidInfos, askInfos;
     bidInfos.reserve(orders_.size());
     askInfos.reserve(orders_.size());
@@ -107,7 +132,9 @@ OrderBookLevelInfos OrderBook::GetOrderInfos() const {
         askInfos.push_back(CreateLevelInfos(price, orders));
     }
 
-    return OrderBookLevelInfos{ bidInfos, askInfos };
+    auto result = OrderBookLevelInfos{ bidInfos, askInfos };
+    performanceTracker_.recordOperation("GetOrderInfos", startTime, orders_.size());
+    return result;
 }
 
 bool OrderBook::CanMatch(Side side, Price price) const {
@@ -159,6 +186,8 @@ bool OrderBook::CanFillCompletely(Side side, Price price, Quantity quantity) con
 }
 
 Trades OrderBook::MatchOrders() {
+    auto startTime = performanceTracker_.startTimer();
+    
     Trades trades;
     trades.reserve(orders_.size());
 
@@ -189,10 +218,7 @@ Trades OrderBook::MatchOrders() {
             bid->Fill(quantity);
             ask->Fill(quantity);
 
-            // Trade should execute at the price of the resting order (the one already in the book)
-            // This gives price improvement to the aggressive order
-            // The resting order's price is the better price for the aggressive order
-            Price executionPrice = ask->GetPrice(); // Resting sell order's price
+            Price executionPrice = ask->GetPrice();
             
             trades.push_back(Trade{
                 TradeInfo{ bid->GetOrderId(), executionPrice, quantity },
@@ -222,7 +248,6 @@ Trades OrderBook::MatchOrders() {
     std::vector<OrderId> ordersToCancel;
     ordersToCancel.reserve(orders_.size()); // Pre-allocate to avoid reallocations
     
-    // Collect order IDs to cancel (avoiding iterator invalidation)
     for (const auto& [orderId, orderEntry] : orders_) {
         const auto& order = orderEntry.order_;
         if (order->GetOrderType() == OrderType::ImmediateOrCancel || 
@@ -230,11 +255,11 @@ Trades OrderBook::MatchOrders() {
             ordersToCancel.push_back(orderId);
         }
     }
-    
-    // Cancel orders after collecting all IDs to avoid iterator invalidation
+ 
     for (OrderId orderId : ordersToCancel) {
         CancelOrder(orderId);
     }
 
+    performanceTracker_.recordOperation("MatchOrders", startTime, trades.size());
     return trades;
 }

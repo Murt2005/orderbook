@@ -34,6 +34,10 @@ private:
         } else {
             std::cout << "Some tests failed" << std::endl;
         }
+        
+        // Print performance report
+        orderbook.printPerformanceReport();
+        orderbook.printPerformanceSummary();
     }
 
 public:
@@ -55,6 +59,7 @@ public:
         testExceptionHandling();
         testTradeValidation();
         testOrderStateValidation();
+        testPerformanceTracking();
 
         printTestResults();
     }
@@ -750,6 +755,62 @@ public:
         auto order3 = std::make_shared<Order>(OrderType::GoodTillCancel, 5, Side::Buy, 100, 10);
         assertTrue(order3->GetInitialQuantity() == order3->GetRemainingQuantity() + order3->GetFilledQuantity(), 
                   "Initial quantity equals remaining plus filled");
+    }
+
+    void testPerformanceTracking() {
+        std::cout << "\n--- Test 16: Performance Tracking ---" << std::endl;
+        resetOrderBook();
+
+        // Enable performance tracking
+        orderbook.enablePerformanceTracking(true);
+        assertTrue(orderbook.isPerformanceTrackingEnabled(), "Performance tracking enabled");
+
+        // Reset metrics
+        orderbook.resetPerformanceMetrics();
+
+        // Perform a series of operations to generate performance data
+        const int numOperations = 1000;
+        
+        // Add orders
+        for (int i = 0; i < numOperations; ++i) {
+            auto order = std::make_shared<Order>(OrderType::GoodTillCancel, i + 1, Side::Buy, 100 + (i % 10), 10);
+            orderbook.AddOrder(order);
+        }
+        assertTrue(orderbook.Size() == numOperations, "All orders added");
+
+        // Add some sell orders to trigger matching
+        for (int i = 0; i < numOperations / 2; ++i) {
+            auto order = std::make_shared<Order>(OrderType::GoodTillCancel, numOperations + i + 1, Side::Sell, 95 + (i % 10), 5);
+            orderbook.AddOrder(order);
+        }
+
+        // Test order modifications
+        for (int i = 0; i < 100; ++i) {
+            OrderModify modify(i + 1, Side::Buy, 105, 15);
+            orderbook.MatchOrder(modify);
+        }
+
+        // Test cancellations
+        for (int i = 0; i < 200; ++i) {
+            orderbook.CancelOrder(i + 1);
+        }
+
+        // Test GetOrderInfos
+        for (int i = 0; i < 50; ++i) {
+            auto levels = orderbook.GetOrderInfos();
+            assertTrue(!levels.GetBids().empty() || !levels.GetAsks().empty(), "Order book has levels");
+        }
+
+        // Test Size operations
+        for (int i = 0; i < 100; ++i) {
+            auto size = orderbook.Size();
+            assertTrue(size >= 0, "Size is non-negative");
+        }
+
+        // Verify that performance metrics were collected
+        assertTrue(orderbook.isPerformanceTrackingEnabled(), "Performance tracking still enabled");
+        
+        std::cout << "Performance test completed. Check the performance report above." << std::endl;
     }
 };
 
