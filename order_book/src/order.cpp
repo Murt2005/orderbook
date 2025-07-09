@@ -10,7 +10,15 @@ Order::Order(OrderType orderType, OrderId orderId, Side side, Price price, Quant
         , price_{ price }
         , initialQuantity_{ quantity }
         , remainingQuantity_{ quantity }
-    { }
+    { 
+        // Validate input parameters
+        if (quantity == 0) {
+            throw std::invalid_argument("Order quantity cannot be zero");
+        }
+        if (orderId == 0) {
+            throw std::invalid_argument("Order ID cannot be zero");
+        }
+    }
 
 OrderId Order::GetOrderId() const {
     return orderId_;
@@ -45,9 +53,17 @@ bool Order::IsFilled() const {
 }
 
 void Order::Fill(Quantity quantity) {
+    if (quantity == 0) {
+        return; // No-op for zero quantity
+    }
     if (quantity > GetRemainingQuantity()) {
         std::stringstream ss;
         ss << "Order (" << GetOrderId() << ") cannot be filled for more than its remaining quantity.";
+        throw std::logic_error(ss.str());
+    }
+    if (quantity < 0) {
+        std::stringstream ss;
+        ss << "Order (" << GetOrderId() << ") cannot be filled with negative quantity.";
         throw std::logic_error(ss.str());
     }
     remainingQuantity_ -= quantity;

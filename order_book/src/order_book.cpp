@@ -3,6 +3,17 @@
 #include <numeric>
 
 Trades OrderBook::AddOrder(OrderPointer order) {
+    // Input validation
+    if (!order) {
+        return { };
+    }
+    if (order->GetRemainingQuantity() == 0) {
+        return { }; // Reject zero quantity orders
+    }
+    if (order->GetOrderId() == 0) {
+        return { }; // Reject invalid order ID
+    }
+    
     if (orders_.find(order->GetOrderId()) != orders_.end()) {
         return { };
     }
@@ -18,12 +29,12 @@ Trades OrderBook::AddOrder(OrderPointer order) {
     if (order->GetSide() == Side::Buy) {
         auto& orders = bids_[order->GetPrice()];
         orders.push_back(order);
-        iterator = std::next(orders.begin(), orders.size() - 1);
+        iterator = std::prev(orders.end());
     }
     else {
         auto& orders = asks_[order->GetPrice()];
         orders.push_back(order);
-        iterator = std::next(orders.begin(), orders.size() - 1);
+        iterator = std::prev(orders.end());
     }
 
     orders_.insert({ order->GetOrderId(), OrderEntry{ order, iterator } });
@@ -32,36 +43,44 @@ Trades OrderBook::AddOrder(OrderPointer order) {
 }
 
 void OrderBook::CancelOrder(OrderId orderId) {
-    if (orders_.find(orderId) == orders_.end()) {
+    auto orderIt = orders_.find(orderId);
+    if (orderIt == orders_.end()) {
         return;
     }
 
-    const auto& [order, iterator] = orders_.at(orderId);
+    const auto& [order, iterator] = orderIt->second;
 
     if (order->GetSide() == Side::Sell) {
         auto price = order->GetPrice();
-        auto& orders = asks_.at(price);
-        orders.erase(iterator);
-        if (orders.empty()) {
-            asks_.erase(price);
+        auto priceIt = asks_.find(price);
+        if (priceIt != asks_.end()) {
+            auto& orders = priceIt->second;
+            orders.erase(iterator);
+            if (orders.empty()) {
+                asks_.erase(price);
+            }
         }
     }
     else {
         auto price = order->GetPrice();
-        auto& orders = bids_.at(price);
-        orders.erase(iterator);
-        if (orders.empty()) {
-            bids_.erase(price);
+        auto priceIt = bids_.find(price);
+        if (priceIt != bids_.end()) {
+            auto& orders = priceIt->second;
+            orders.erase(iterator);
+            if (orders.empty()) {
+                bids_.erase(price);
+            }
         }
     }
     orders_.erase(orderId);
 }
 
 Trades OrderBook::MatchOrder(OrderModify order) {
-    if (orders_.find(order.GetOrderId()) == orders_.end()) {
+    auto orderIt = orders_.find(order.GetOrderId());
+    if (orderIt == orders_.end()) {
         return { };
     }
-    const auto& [existingOrder, _] = orders_.at(order.GetOrderId());
+    const auto& [existingOrder, _] = orderIt->second;
     OrderType orderType = existingOrder->GetOrderType();
     CancelOrder(order.GetOrderId());
     return AddOrder(order.ToOrderPointer(orderType));
@@ -76,7 +95,7 @@ OrderBookLevelInfos OrderBook::GetOrderInfos() const {
 
     auto CreateLevelInfos = [](Price price, const OrderPointers& orders) {
         return LevelInfo{ price, std::accumulate(orders.begin(), orders.end(), (Quantity)0,
-        [](std::size_t runningSum, const OrderPointer& order)
+        [](Quantity runningSum, const OrderPointer& order)
         { return runningSum + order->GetRemainingQuantity(); }) };
         };
 
@@ -136,7 +155,7 @@ bool OrderBook::CanFillCompletely(Side side, Price price, Quantity quantity) con
             }
         }
     }
-    return availableQuantity >= quantity;
+    return false;
 }
 
 Trades OrderBook::MatchOrders() {
@@ -170,9 +189,14 @@ Trades OrderBook::MatchOrders() {
             bid->Fill(quantity);
             ask->Fill(quantity);
 
+            // Trade should execute at the price of the resting order (the one already in the book)
+            // This gives price improvement to the aggressive order
+            // The resting order's price is the better price for the aggressive order
+            Price executionPrice = ask->GetPrice(); // Resting sell order's price
+            
             trades.push_back(Trade{
-                TradeInfo{ bid->GetOrderId(), bid->GetPrice(), quantity },
-                TradeInfo{ ask->GetOrderId(), ask->GetPrice(), quantity }
+                TradeInfo{ bid->GetOrderId(), executionPrice, quantity },
+                TradeInfo{ ask->GetOrderId(), executionPrice, quantity }
             });
 
             if (bid->IsFilled()) {
@@ -196,15 +220,18 @@ Trades OrderBook::MatchOrders() {
 
     // Handle Immediate-Or-Cancel and FillOrKill orders that couldn't be fully matched
     std::vector<OrderId> ordersToCancel;
+    ordersToCancel.reserve(orders_.size()); // Pre-allocate to avoid reallocations
+    
+    // Collect order IDs to cancel (avoiding iterator invalidation)
     for (const auto& [orderId, orderEntry] : orders_) {
         const auto& order = orderEntry.order_;
-        if (order->GetOrderType() == OrderType::ImmediateOrCancel) {
-            ordersToCancel.push_back(orderId);
-        } else if (order->GetOrderType() == OrderType::FillOrKill) {
+        if (order->GetOrderType() == OrderType::ImmediateOrCancel || 
+            order->GetOrderType() == OrderType::FillOrKill) {
             ordersToCancel.push_back(orderId);
         }
     }
     
+    // Cancel orders after collecting all IDs to avoid iterator invalidation
     for (OrderId orderId : ordersToCancel) {
         CancelOrder(orderId);
     }

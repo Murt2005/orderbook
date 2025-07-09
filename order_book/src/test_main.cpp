@@ -51,6 +51,10 @@ public:
         testOrderModification();
         testOrderBookLevels();
         testEdgeCases();
+        testAdditionalEdgeCases();
+        testExceptionHandling();
+        testTradeValidation();
+        testOrderStateValidation();
 
         printTestResults();
     }
@@ -174,14 +178,14 @@ public:
     }
 
     void testImmediateOrCancelOrders() {
-        std::cout << "\n--- Test 7: Fill And Kill Orders ---" << std::endl;
+        std::cout << "\n--- Test 7: Immediate Or Cancel Orders ---" << std::endl;
         resetOrderBook();
 
         auto iocOrder1 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 1, Side::Buy, 100, 10);
         auto trades = orderbook.AddOrder(iocOrder1);
         
-        assertTrue(orderbook.Size() == 0, "FAK order with no match rejected");
-        assertTrue(trades.empty(), "No trades from rejected FAK order");
+        assertTrue(orderbook.Size() == 0, "IOC order with no match rejected");
+        assertTrue(trades.empty(), "No trades from rejected IOC order");
 
         auto sellOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Sell, 100, 15);
         orderbook.AddOrder(sellOrder);
@@ -189,19 +193,19 @@ public:
         auto iocOrder2 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 3, Side::Buy, 100, 10);
         trades = orderbook.AddOrder(iocOrder2);
         
-        assertTrue(trades.size() == 1, "FAK order executed");
-        assertTrue(orderbook.Size() == 1, "Sell order partially filled, FAK order gone");
+        assertTrue(trades.size() == 1, "IOC order executed");
+        assertTrue(orderbook.Size() == 1, "Sell order partially filled, IOC order gone");
 
         if (!trades.empty()) {
-            assertTrue(trades[0].GetBidTrade().quantity_ == 10, "Full FAK quantity traded");
+            assertTrue(trades[0].GetBidTrade().quantity_ == 10, "Full IOC quantity traded");
             assertTrue(trades[0].GetAskTrade().quantity_ == 10, "Correct sell quantity traded");
         }
 
         auto iocOrder3 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 4, Side::Buy, 100, 20);
         trades = orderbook.AddOrder(iocOrder3);
         
-        assertTrue(trades.size() == 1, "Second FAK order partially executed");
-        assertTrue(orderbook.Size() == 0, "Sell order filled, all FAK orders gone");
+        assertTrue(trades.size() == 1, "Second IOC order partially executed");
+        assertTrue(orderbook.Size() == 0, "Sell order filled, all IOC orders gone");
 
         auto sellOrder2 = std::make_shared<Order>(OrderType::GoodTillCancel, 5, Side::Sell, 100, 8);
         auto sellOrder3 = std::make_shared<Order>(OrderType::GoodTillCancel, 6, Side::Sell, 101, 6);
@@ -215,7 +219,7 @@ public:
         auto iocOrder4 = std::make_shared<Order>(OrderType::ImmediateOrCancel, 8, Side::Buy, 105, 15);
         trades = orderbook.AddOrder(iocOrder4);
 
-        assertTrue(trades.size() == 3, "FAK order matched three price levels");
+        assertTrue(trades.size() == 3, "IOC order matched three price levels");
         assertTrue(orderbook.Size() == 1, "One sell order partially filled remains");
 
         if (trades.size() >= 3) {
@@ -223,7 +227,7 @@ public:
             for (const auto& trade : trades) {
                 totalTraded += trade.GetBidTrade().quantity_;
             }
-            assertTrue(totalTraded == 15, "Total fak quantity fully executed");
+            assertTrue(totalTraded == 15, "Total IOC quantity fully executed");
         }
     }
 
@@ -403,6 +407,7 @@ public:
         std::cout << "\n--- Test 11: Edge Cases ---" << std::endl;
         resetOrderBook();
 
+        // Test 1: Duplicate order ID
         auto order1 = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
         auto order2 = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Sell, 95, 5);
         
@@ -412,9 +417,339 @@ public:
         assertTrue(orderbook.Size() == 1, "Duplicate order ID rejected");
         assertTrue(trades.empty(), "No trades from duplicate order");
 
+        // Test 2: Large quantity order
         auto largeOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Buy, 100, UINT32_MAX);
         orderbook.AddOrder(largeOrder);
         assertTrue(orderbook.Size() == 2, "Large quantity order accepted");
+
+        resetOrderBook();
+
+        // Test 3: Zero quantity order (should throw)
+        try {
+            auto zeroOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 3, Side::Buy, 100, 0);
+            orderbook.AddOrder(zeroOrder);
+            assertTrue(false, "Zero quantity order should throw");
+        } catch (const std::invalid_argument&) {
+            assertTrue(true, "Zero quantity order threw exception");
+        }
+
+        resetOrderBook();
+
+        // Test 4: Negative price (edge case for price validation)
+        auto negativePriceOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 4, Side::Buy, -50, 10);
+        trades = orderbook.AddOrder(negativePriceOrder);
+        assertTrue(orderbook.Size() == 1, "Negative price order accepted");
+        
+        // Test matching with negative price
+        auto matchingSell = std::make_shared<Order>(OrderType::GoodTillCancel, 5, Side::Sell, -50, 5);
+        trades = orderbook.AddOrder(matchingSell);
+        assertTrue(trades.size() == 1, "Trade executed with negative prices");
+        assertTrue(orderbook.Size() == 1, "One order partially filled");
+
+        resetOrderBook();
+
+        // Test 5: Very large price values
+        auto largePriceOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 6, Side::Buy, INT32_MAX, 10);
+        trades = orderbook.AddOrder(largePriceOrder);
+        assertTrue(orderbook.Size() == 1, "Very large price order accepted");
+
+        resetOrderBook();
+
+        // Test 6: Order modification of non-existent order
+        OrderModify nonExistentModify(999, Side::Buy, 100, 10);
+        trades = orderbook.MatchOrder(nonExistentModify);
+        assertTrue(trades.empty(), "No trades from modifying non-existent order");
+        assertTrue(orderbook.Size() == 0, "Order book unchanged");
+
+        resetOrderBook();
+
+        // Test 7: Cancelling non-existent order
+        orderbook.CancelOrder(999);
+        assertTrue(orderbook.Size() == 0, "Cancelling non-existent order doesn't affect book");
+
+        resetOrderBook();
+
+        // Test 8: Multiple orders with same price but different quantities
+        for (int i = 0; i < 5; ++i) {
+            auto order = std::make_shared<Order>(OrderType::GoodTillCancel, 10 + i, Side::Buy, 100, 10 + i);
+            orderbook.AddOrder(order);
+        }
+        assertTrue(orderbook.Size() == 5, "Five orders at same price level");
+        
+        auto levels = orderbook.GetOrderInfos();
+        if (!levels.GetBids().empty()) {
+            assertTrue(levels.GetBids()[0].quantity_ == 60, "Total quantity at price level correct"); // 10+11+12+13+14 = 60
+        }
+
+        resetOrderBook();
+
+        // Test 9: Stress test with many orders
+        for (int i = 0; i < 100; ++i) {
+            auto order = std::make_shared<Order>(OrderType::GoodTillCancel, 100 + i, Side::Buy, 100 + (i % 10), 10);
+            orderbook.AddOrder(order);
+        }
+        assertTrue(orderbook.Size() == 100, "100 orders added successfully");
+        
+        // Test 10: Boundary price matching
+        auto boundaryBuy = std::make_shared<Order>(OrderType::GoodTillCancel, 200, Side::Buy, 100, 10);
+        auto boundarySell = std::make_shared<Order>(OrderType::GoodTillCancel, 201, Side::Sell, 100, 10);
+        
+        orderbook.AddOrder(boundaryBuy);
+        trades = orderbook.AddOrder(boundarySell);
+        assertTrue(trades.size() == 1, "Boundary price orders matched");
+        assertTrue(orderbook.Size() == 100, "Original orders unchanged");
+    }
+
+    void testAdditionalEdgeCases() {
+        std::cout << "\n--- Test 12: Additional Edge Cases ---" << std::endl;
+        resetOrderBook();
+
+        // Test 1: Order with maximum order ID
+        auto maxIdOrder = std::make_shared<Order>(OrderType::GoodTillCancel, UINT64_MAX, Side::Buy, 100, 10);
+        auto trades = orderbook.AddOrder(maxIdOrder);
+        assertTrue(orderbook.Size() == 1, "Order with maximum ID accepted");
+        assertTrue(trades.empty(), "No trades from single order");
+
+        resetOrderBook();
+
+        // Test 2: Mixed order types at same price level
+        auto gtcOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
+        orderbook.AddOrder(gtcOrder);
+        // No duplicate AddOrder for gtcOrder
+        
+        // Add a sell order to provide liquidity for IOC/FOK orders
+        auto sellOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 4, Side::Sell, 100, 20);
+        orderbook.AddOrder(sellOrder);
+        // No duplicate AddOrder for sellOrder
+        
+        auto iocOrder = std::make_shared<Order>(OrderType::ImmediateOrCancel, 2, Side::Buy, 100, 5);
+        auto fokOrder = std::make_shared<Order>(OrderType::FillOrKill, 3, Side::Buy, 100, 3);
+        
+        trades = orderbook.AddOrder(iocOrder);
+        assertTrue(trades.size() == 1, "Trade executed for IOC order");
+        trades = orderbook.AddOrder(fokOrder);
+        // After IOC and FOK, only the partially filled sell order should remain
+        assertTrue(orderbook.Size() == 1, "Mixed order types at same price level");
+        resetOrderBook();
+
+        // Test 3: Rapid order addition and cancellation
+        for (int i = 1; i <= 50; ++i) { // IDs from 1 to 50
+            auto order = std::make_shared<Order>(OrderType::GoodTillCancel, i, Side::Buy, 100 + i, 10);
+            orderbook.AddOrder(order);
+            if (i % 2 == 0) {
+                orderbook.CancelOrder(i);
+            }
+        }
+        assertTrue(orderbook.Size() == 25, "Rapid add/cancel operations handled correctly");
+
+        resetOrderBook();
+
+        // Test 4: Orders with extreme price differences
+        auto lowPriceOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, INT32_MIN, 10);
+        auto highPriceOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Sell, INT32_MAX, 10);
+        
+        orderbook.AddOrder(lowPriceOrder);
+        orderbook.AddOrder(highPriceOrder);
+        assertTrue(orderbook.Size() == 2, "Extreme price difference orders accepted");
+        assertTrue(orderbook.GetOrderInfos().GetBids().size() == 1, "One bid level");
+        assertTrue(orderbook.GetOrderInfos().GetAsks().size() == 1, "One ask level");
+
+        resetOrderBook();
+
+        // Test 5: Order modification with same parameters
+        auto originalOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
+        orderbook.AddOrder(originalOrder);
+        
+        OrderModify sameModify(1, Side::Buy, 100, 10);
+        trades = orderbook.MatchOrder(sameModify);
+        assertTrue(orderbook.Size() == 1, "Order with same parameters still in book");
+        assertTrue(trades.empty(), "No trades from identical modification");
+
+        resetOrderBook();
+
+        // Test 6: Empty order book operations
+        assertTrue(orderbook.Size() == 0, "Empty order book size");
+        assertTrue(orderbook.GetOrderInfos().GetBids().empty(), "Empty bid levels");
+        assertTrue(orderbook.GetOrderInfos().GetAsks().empty(), "Empty ask levels");
+        
+        // Test operations on empty book
+        orderbook.CancelOrder(999);
+        assertTrue(orderbook.Size() == 0, "Cancel on empty book doesn't change size");
+        
+        OrderModify emptyModify(999, Side::Buy, 100, 10);
+        trades = orderbook.MatchOrder(emptyModify);
+        assertTrue(trades.empty(), "Modify on empty book returns no trades");
+
+        resetOrderBook();
+
+        // Test 7: Partial fill edge cases
+        auto sellOrderPartial = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Sell, 100, 100);
+        orderbook.AddOrder(sellOrderPartial);
+        
+        // Multiple small buy orders
+        for (int i = 0; i < 10; ++i) {
+            auto buyOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 10 + i, Side::Buy, 100, 5);
+            trades = orderbook.AddOrder(buyOrder);
+            assertTrue(trades.size() == 1, "Trade executed for small order");
+        }
+        
+        assertTrue(orderbook.Size() == 1, "Sell order partially filled, still in book");
+        auto levels = orderbook.GetOrderInfos();
+        if (!levels.GetAsks().empty()) {
+            assertTrue(levels.GetAsks()[0].quantity_ == 50, "Remaining quantity correct after partial fills");
+        }
+    }
+
+    void testExceptionHandling() {
+        std::cout << "\n--- Test 13: Exception Handling ---" << std::endl;
+        resetOrderBook();
+
+        // Test 1: Over-filling an order (should throw std::logic_error)
+        auto order = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
+        try {
+            order->Fill(15); // Try to fill more than available
+            assertTrue(false, "Over-filling should throw an exception");
+        } catch (const std::logic_error& e) {
+            assertTrue(true, "Over-filling threw expected std::logic_error");
+        }
+
+        // Test 2: Fill with exact quantity (should not throw)
+        try {
+            order->Fill(10);
+            assertTrue(order->IsFilled(), "Order should be filled after exact fill");
+        } catch (const std::exception& e) {
+            assertTrue(false, "Exact fill should not throw an exception");
+        }
+
+        // Test 3: Fill with zero quantity (should not throw)
+        auto order2 = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Buy, 100, 10);
+        try {
+            order2->Fill(0);
+            assertTrue(order2->GetRemainingQuantity() == 10, "Zero fill should not change quantity");
+        } catch (const std::exception& e) {
+            assertTrue(false, "Zero fill should not throw an exception");
+        }
+
+        // Test 4: Fill with negative quantity (should throw)
+        auto order3 = std::make_shared<Order>(OrderType::GoodTillCancel, 3, Side::Buy, 100, 10);
+        try {
+            order3->Fill(-5);
+            assertTrue(false, "Negative fill should throw an exception");
+        } catch (const std::logic_error& e) {
+            assertTrue(true, "Negative fill threw expected exception");
+        }
+
+        // Test 5: Multiple fills that exceed total quantity
+        auto order4 = std::make_shared<Order>(OrderType::GoodTillCancel, 4, Side::Buy, 100, 10);
+        try {
+            order4->Fill(5);
+            order4->Fill(5);
+            order4->Fill(1); // This should work
+            order4->Fill(1); // This should throw
+            assertTrue(false, "Over-filling through multiple fills should throw");
+        } catch (const std::logic_error& e) {
+            assertTrue(true, "Over-filling through multiple fills threw expected exception");
+        }
+    }
+
+    void testTradeValidation() {
+        std::cout << "\n--- Test 14: Trade Validation ---" << std::endl;
+        resetOrderBook();
+
+        // Test 1: Trade execution price validation
+        auto sellOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Sell, 100, 10);
+        orderbook.AddOrder(sellOrder);
+
+        auto buyOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Buy, 105, 10);
+        auto trades = orderbook.AddOrder(buyOrder);
+
+        assertTrue(trades.size() == 1, "Trade executed");
+        if (!trades.empty()) {
+            // Trade should execute at the better price (sell price = 100)
+            assertTrue(trades[0].GetBidTrade().price_ == 100, "Trade executed at sell price (better price)");
+            assertTrue(trades[0].GetAskTrade().price_ == 100, "Trade executed at sell price (better price)");
+            assertTrue(trades[0].GetBidTrade().quantity_ == 10, "Trade quantity correct");
+            assertTrue(trades[0].GetAskTrade().quantity_ == 10, "Trade quantity correct");
+        }
+
+        resetOrderBook();
+
+        // Test 2: Trade with zero quantity orders (should throw)
+        try {
+            auto zeroQuantitySell = std::make_shared<Order>(OrderType::GoodTillCancel, 3, Side::Sell, 100, 0);
+            orderbook.AddOrder(zeroQuantitySell);
+            assertTrue(false, "Zero quantity sell order should throw");
+        } catch (const std::invalid_argument&) {
+            assertTrue(true, "Zero quantity sell order threw exception");
+        }
+        try {
+            auto zeroQuantityBuy = std::make_shared<Order>(OrderType::GoodTillCancel, 4, Side::Buy, 100, 0);
+            orderbook.AddOrder(zeroQuantityBuy);
+            assertTrue(false, "Zero quantity buy order should throw");
+        } catch (const std::invalid_argument&) {
+            assertTrue(true, "Zero quantity buy order threw exception");
+        }
+
+        resetOrderBook();
+
+        // Test 3: Trade price priority (buy at 105, sell at 100)
+        auto sellOrder2 = std::make_shared<Order>(OrderType::GoodTillCancel, 5, Side::Sell, 100, 10);
+        orderbook.AddOrder(sellOrder2);
+
+        auto buyOrder2 = std::make_shared<Order>(OrderType::GoodTillCancel, 6, Side::Buy, 105, 10);
+        trades = orderbook.AddOrder(buyOrder2);
+
+        assertTrue(trades.size() == 1, "Trade executed with price improvement");
+        if (!trades.empty()) {
+            // Should trade at the better price (100)
+            assertTrue(trades[0].GetBidTrade().price_ == 100, "Buy order traded at better price");
+            assertTrue(trades[0].GetAskTrade().price_ == 100, "Sell order traded at better price");
+        }
+    }
+
+    void testOrderStateValidation() {
+        std::cout << "\n--- Test 15: Order State Validation ---" << std::endl;
+        resetOrderBook();
+
+        // Test 1: Order state after creation
+        auto order1 = std::make_shared<Order>(OrderType::GoodTillCancel, 1, Side::Buy, 100, 10);
+        assertTrue(order1->GetInitialQuantity() == 10, "Initial quantity correct");
+        assertTrue(order1->GetRemainingQuantity() == 10, "Remaining quantity equals initial");
+        assertTrue(order1->GetFilledQuantity() == 0, "Filled quantity is zero");
+        assertTrue(!order1->IsFilled(), "Order is not filled initially");
+
+        orderbook.AddOrder(order1);
+        assertTrue(orderbook.Size() == 1, "Order added to book");
+
+        // Test 2: Order state after partial fill
+        auto sellOrder = std::make_shared<Order>(OrderType::GoodTillCancel, 2, Side::Sell, 100, 5);
+        auto trades = orderbook.AddOrder(sellOrder);
+
+        assertTrue(trades.size() == 1, "Trade executed");
+        assertTrue(order1->GetRemainingQuantity() == 5, "Order partially filled");
+        assertTrue(order1->GetFilledQuantity() == 5, "Filled quantity updated");
+        assertTrue(!order1->IsFilled(), "Order not completely filled");
+
+        // Test 3: Order state after complete fill
+        auto sellOrder2 = std::make_shared<Order>(OrderType::GoodTillCancel, 3, Side::Sell, 100, 5);
+        trades = orderbook.AddOrder(sellOrder2);
+
+        assertTrue(trades.size() == 1, "Trade executed");
+        assertTrue(order1->GetRemainingQuantity() == 0, "Order completely filled");
+        assertTrue(order1->GetFilledQuantity() == 10, "Filled quantity equals initial");
+        assertTrue(order1->IsFilled(), "Order is filled");
+
+        // Test 4: Order state after cancellation
+        resetOrderBook();
+        auto order2 = std::make_shared<Order>(OrderType::GoodTillCancel, 4, Side::Buy, 100, 10);
+        orderbook.AddOrder(order2);
+        orderbook.CancelOrder(4);
+        assertTrue(orderbook.Size() == 0, "Order removed from book after cancellation");
+
+        // Test 5: Order state consistency
+        auto order3 = std::make_shared<Order>(OrderType::GoodTillCancel, 5, Side::Buy, 100, 10);
+        assertTrue(order3->GetInitialQuantity() == order3->GetRemainingQuantity() + order3->GetFilledQuantity(), 
+                  "Initial quantity equals remaining plus filled");
     }
 };
 

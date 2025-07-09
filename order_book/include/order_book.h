@@ -15,7 +15,7 @@
 // Features:
 // - Price-time priority matching (best price first, then FIFO within price levels)
 // - Support for Good-Till-Cancel (GTC), ImmediateOrCancel (IOC), and FillOrKill (FOK) orders
-// - Order modification throuugh cancel-and-replace semantics
+// - Order modification through cancel-and-replace semantics
 // - Real-time trade generation and order book level information
 // - Efficient order lookup and management using hash maps and sorted containers
 class OrderBook {
