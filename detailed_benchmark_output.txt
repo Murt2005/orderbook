@@ -1,0 +1,45 @@
+=== ORDER BOOK PERFORMANCE BENCHMARK ===
+Running various workloads to test performance...
+
+Test 1: High-frequency order additions (10,000 orders)
+  Completed in 94 ms
+  Orders per second: 106382
+  Order book size: 2158
+
+Test 2: Order matching stress test
+  Completed in 101 ms
+  Orders per second: 99009
+  Final order book size: 3703
+
+Test 3: Mixed operations (add, modify, cancel)
+  Completed in 7 ms
+  Operations per second: 414285
+  Final order book size: 1700
+
+Test 4: Large order book operations
+  Completed in 1018 ms
+  Orders per second: 50098
+  Final order book size: 6075
+  Price levels (bids): 23
+  Price levels (asks): 14
+
+
+=== FINAL PERFORMANCE REPORT ===
+
+=== PERFORMANCE REPORT ===
+           Operation       CallsTotal Time (ms) Avg Time (μs) Min Time (μs) Max Time (μs)    Orders/Call
+---------------------------------------------------------------------------------------------------------
+ CancelOrder_Success          72              0              0              0              4              1
+CancelOrder_NotFound         928              0              0              0              0              0
+                Size           2              0              0              0              0              0
+       GetOrderInfos           1              0             51             51             51           6147
+    AddOrder_Success       50000           1013             20              0            168              1
+         MatchOrders       50000           1002             20              0            168              0
+
+
+=== PERFORMANCE SUMMARY ===
+Total Operations: 101003
+Total Time: 2015 ms
+Average Time per Operation: 0 ms
+Operations per Second: 50125
+
