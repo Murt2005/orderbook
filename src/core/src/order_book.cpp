@@ -3,8 +3,10 @@
 #include <numeric>
 
 Trades OrderBook::AddOrder(OrderPointer order) {
+    std::lock_guard<std::mutex> perfLock(performanceMutex_);
     auto startTime = performanceTracker_.startTimer();
     
+    // Basic validation before acquiring write lock
     if (!order) {
         performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
@@ -18,10 +20,16 @@ Trades OrderBook::AddOrder(OrderPointer order) {
         return { };
     }
     
+    // Acquire exclusive lock for order book modifications
+    std::unique_lock<std::shared_mutex> lock(orderBookMutex_);
+    
+    // Check for duplicate order ID
     if (orders_.find(order->GetOrderId()) != orders_.end()) {
         performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
     }
+    
+    // Check order type constraints
     if (order->GetOrderType() == OrderType::ImmediateOrCancel && !CanMatch(order->GetSide(), order->GetPrice())) {
         performanceTracker_.recordOperation("AddOrder_Rejected", startTime, 0);
         return { };
@@ -31,8 +39,8 @@ Trades OrderBook::AddOrder(OrderPointer order) {
         return { };
     }
 
+    // Add order to appropriate side
     OrderPointers::iterator iterator;
-
     if (order->GetSide() == Side::Buy) {
         auto& orders = bids_[order->GetPrice()];
         orders.push_back(order);
@@ -46,13 +54,18 @@ Trades OrderBook::AddOrder(OrderPointer order) {
 
     orders_.insert({ order->GetOrderId(), OrderEntry{ order, iterator } });
 
+    // Perform matching while holding the lock
     auto trades = MatchOrders();
     performanceTracker_.recordOperation("AddOrder_Success", startTime, 1);
     return trades;
 }
 
 void OrderBook::CancelOrder(OrderId orderId) {
+    std::lock_guard<std::mutex> perfLock(performanceMutex_);
     auto startTime = performanceTracker_.startTimer();
+    
+    // Acquire exclusive lock for order book modifications
+    std::unique_lock<std::shared_mutex> lock(orderBookMutex_);
     
     auto orderIt = orders_.find(orderId);
     if (orderIt == orders_.end()) {
@@ -62,6 +75,7 @@ void OrderBook::CancelOrder(OrderId orderId) {
 
     const auto& [order, iterator] = orderIt->second;
 
+    // Remove from appropriate price level
     if (order->GetSide() == Side::Sell) {
         auto price = order->GetPrice();
         auto priceIt = asks_.find(price);
@@ -89,30 +103,47 @@ void OrderBook::CancelOrder(OrderId orderId) {
 }
 
 Trades OrderBook::MatchOrder(OrderModify order) {
+    std::lock_guard<std::mutex> perfLock(performanceMutex_);
     auto startTime = performanceTracker_.startTimer();
+    
+    // Acquire exclusive lock for order book modifications
+    std::unique_lock<std::shared_mutex> lock(orderBookMutex_);
     
     auto orderIt = orders_.find(order.GetOrderId());
     if (orderIt == orders_.end()) {
         performanceTracker_.recordOperation("MatchOrder_NotFound", startTime, 0);
         return { };
     }
+    
     const auto& [existingOrder, _] = orderIt->second;
     OrderType orderType = existingOrder->GetOrderType();
-    CancelOrder(order.GetOrderId());
-    auto trades = AddOrder(order.ToOrderPointer(orderType));
+    
+    // Perform cancel-and-replace operation while holding the lock
+    CancelOrderInternal(order.GetOrderId());
+    auto trades = AddOrderInternal(order.ToOrderPointer(orderType));
+    
     performanceTracker_.recordOperation("MatchOrder_Success", startTime, 1);
     return trades;
 }
 
 std::size_t OrderBook::Size() const { 
+    std::lock_guard<std::mutex> perfLock(performanceMutex_);
     auto startTime = performanceTracker_.startTimer();
+    
+    // Use shared lock for read-only operation
+    std::shared_lock<std::shared_mutex> lock(orderBookMutex_);
     auto size = orders_.size();
+    
     performanceTracker_.recordOperation("Size", startTime, 0);
     return size;
 }
 
 OrderBookLevelInfos OrderBook::GetOrderInfos() const {
+    std::lock_guard<std::mutex> perfLock(performanceMutex_);
     auto startTime = performanceTracker_.startTimer();
+    
+    // Use shared lock for read-only operation
+    std::shared_lock<std::shared_mutex> lock(orderBookMutex_);
     
     LevelInfos bidInfos, askInfos;
     bidInfos.reserve(orders_.size());
@@ -257,9 +288,113 @@ Trades OrderBook::MatchOrders() {
     }
  
     for (OrderId orderId : ordersToCancel) {
-        CancelOrder(orderId);
+        CancelOrderInternal(orderId);
     }
 
     performanceTracker_.recordOperation("MatchOrders", startTime, trades.size());
     return trades;
+}
+
+// Thread-safe helper methods (called from methods that already hold locks)
+Trades OrderBook::AddOrderInternal(OrderPointer order) {
+    if (!order || order->GetRemainingQuantity() == 0 || order->GetOrderId() == 0) {
+        return { };
+    }
+    
+    if (orders_.find(order->GetOrderId()) != orders_.end()) {
+        return { };
+    }
+    if (order->GetOrderType() == OrderType::ImmediateOrCancel && !CanMatch(order->GetSide(), order->GetPrice())) {
+        return { };
+    }
+    if (order->GetOrderType() == OrderType::FillOrKill && !CanFillCompletely(order->GetSide(), order->GetPrice(), order->GetRemainingQuantity())) {
+        return { };
+    }
+
+    OrderPointers::iterator iterator;
+    if (order->GetSide() == Side::Buy) {
+        auto& orders = bids_[order->GetPrice()];
+        orders.push_back(order);
+        iterator = std::prev(orders.end());
+    }
+    else {
+        auto& orders = asks_[order->GetPrice()];
+        orders.push_back(order);
+        iterator = std::prev(orders.end());
+    }
+
+    orders_.insert({ order->GetOrderId(), OrderEntry{ order, iterator } });
+    return MatchOrders();
+}
+
+void OrderBook::CancelOrderInternal(OrderId orderId) {
+    auto orderIt = orders_.find(orderId);
+    if (orderIt == orders_.end()) {
+        return;
+    }
+
+    const auto& [order, iterator] = orderIt->second;
+
+    if (order->GetSide() == Side::Sell) {
+        auto price = order->GetPrice();
+        auto priceIt = asks_.find(price);
+        if (priceIt != asks_.end()) {
+            auto& orders = priceIt->second;
+            orders.erase(iterator);
+            if (orders.empty()) {
+                asks_.erase(price);
+            }
+        }
+    }
+    else {
+        auto price = order->GetPrice();
+        auto priceIt = bids_.find(price);
+        if (priceIt != bids_.end()) {
+            auto& orders = priceIt->second;
+            orders.erase(iterator);
+            if (orders.empty()) {
+                bids_.erase(price);
+            }
+        }
+    }
+    orders_.erase(orderId);
+}
+
+Trades OrderBook::MatchOrderInternal(OrderModify order) {
+    auto orderIt = orders_.find(order.GetOrderId());
+    if (orderIt == orders_.end()) {
+        return { };
+    }
+    
+    const auto& [existingOrder, _] = orderIt->second;
+    OrderType orderType = existingOrder->GetOrderType();
+    
+    CancelOrderInternal(order.GetOrderId());
+    return AddOrderInternal(order.ToOrderPointer(orderType));
+}
+
+std::size_t OrderBook::SizeInternal() const {
+    return orders_.size();
+}
+
+OrderBookLevelInfos OrderBook::GetOrderInfosInternal() const {
+    LevelInfos bidInfos, askInfos;
+    bidInfos.reserve(orders_.size());
+    askInfos.reserve(orders_.size());
+
+    auto CreateLevelInfos = [](Price price, const OrderPointers& orders) {
+        return LevelInfo{ price, std::accumulate(orders.begin(), orders.end(), (Quantity)0,
+        [](Quantity runningSum, const OrderPointer& order)
+        { return runningSum + order->GetRemainingQuantity(); }) };
+        };
+
+    for (const auto& [price, orders] : bids_) {
+        bidInfos.push_back(CreateLevelInfos(price, orders));
+    }
+
+    for (const auto& [price, orders] : asks_) {
+        askInfos.push_back(CreateLevelInfos(price, orders));
+    }
+
+    return OrderBookLevelInfos{ bidInfos, askInfos };
 }

@@ -1,0 +1,352 @@
+Running OrderBook Tests...
+
+--- Test 1: Order Addition ---
+Passed: OrderBook size after adding buy order
+Passed: No trades on single order addition
+Passed: OrderBook size after adding sell order
+Passed: No trades when prices don't overlap
+
+--- Test 2: Order Cancellation ---
+Passed: Two orders added
+Passed: One order cancelled
+Passed: Cancelling non-existent order doesn't affect size
+Passed: All orders cancelled
+
+--- Test 3: Simple Matching ---
+Passed: No trades on first order
+Passed: One trade executed
+Passed: Both orders filled and removed
+Passed: Buy trade quantity correct
+Passed: Sell trade quantity correct
+
+--- Test 4: Partial Fills ---
+Passed: One trade executed
+Passed: Sell order partially filled, still in book
+Passed: One ask level remaining
+Passed: Remaining quantity correct
+
+--- Test 5: Price-Time Priority ---
+Passed: One trade executed
+Passed: Three orders remain
+Passed: First order matched (time priority)
+Passed: Correct quantity matched
+
+--- Test 6: Good Till Cancel Orders ---
+Passed: GTC order added
+Passed: Both GTC orders remain when no match
+
+--- Test 7: Immediate Or Cancel Orders ---
+Passed: IOC order with no match rejected
+Passed: No trades from rejected IOC order
+Passed: IOC order executed
+Passed: Sell order partially filled, IOC order gone
+Passed: Full IOC quantity traded
+Passed: Correct sell quantity traded
+Passed: Second IOC order partially executed
+Passed: Sell order filled, all IOC orders gone
+Passed: Three sell orders added
+Passed: IOC order matched three price levels
+Passed: One sell order partially filled remains
+Passed: Total IOC quantity fully executed
+
+--- Test 8: FillOrKill Orders ---
+Passed: FOK order executed
+Passed: Sell order partially filled
+Passed: FOK order fully executed
+Passed: Correct quantity traded from sell order
+Passed: Remaining sell quantity correct after FOK
+Passed: FOK order rejected due to insufficient liquidity
+Passed: Only original sell order left
+Passed: Original sell order unchanged after FOK rejection
+Passed: 3 sell orders added
+Passed: FOK order executed 3 trades
+Passed: No trades left
+Passed: Total FOK quantity fully executed
+Passed: No trades occur
+Passed: No orders in book
+Passed: FOK sell order executed
+Passed: Buy order still open
+Passed: FOK sell quantity correct
+Passed: Matching buy quantity correct
+Passed: FOK order rejected due to price mismatch
+Passed: Original sell order unchanged
+Passed: Five sell orders added
+Passed: Large FOK order executed across all levels
+Passed: All orders filled
+Passed: Complete large FOK quantity executed
+
+--- Test 9: Order Modification ---
+Passed: Modified order in book
+Passed: No trades from modification
+Passed: One bid level
+Passed: Price modified correctly
+Passed: Quantity modified correctly
+
+--- Test 10: OrderBook Levels ---
+Passed: Two bid levels
+Passed: Two ask levels
+Passed: Bids ordered high to low
+Passed: Asks ordered low to high
+
+--- Test 11: Edge Cases ---
+Passed: Duplicate order ID rejected
+Passed: No trades from duplicate order
+Passed: Large quantity order accepted
+Passed: Zero quantity order threw exception
+Passed: Negative price order accepted
+Passed: Trade executed with negative prices
+Passed: One order partially filled
+Passed: Very large price order accepted
+Passed: No trades from modifying non-existent order
+Passed: Order book unchanged
+Passed: Cancelling non-existent order doesn't affect book
+Passed: Five orders at same price level
+Passed: Total quantity at price level correct
+Passed: 100 orders added successfully
+Passed: Boundary price orders matched
+Passed: Original orders unchanged
+
+--- Test 12: Additional Edge Cases ---
+Passed: Order with maximum ID accepted
+Passed: No trades from single order
+Passed: Trade executed for IOC order
+Passed: Mixed order types at same price level
+Passed: Rapid add/cancel operations handled correctly
+Passed: Extreme price difference orders accepted
+Passed: One bid level
+Passed: One ask level
+Passed: Order with same parameters still in book
+Passed: No trades from identical modification
+Passed: Empty order book size
+Passed: Empty bid levels
+Passed: Empty ask levels
+Passed: Cancel on empty book doesn't change size
+Passed: Modify on empty book returns no trades
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Trade executed for small order
+Passed: Sell order partially filled, still in book
+Passed: Remaining quantity correct after partial fills
+
+--- Test 13: Exception Handling ---
+Passed: Over-filling threw expected std::logic_error
+Passed: Order should be filled after exact fill
+Passed: Zero fill should not change quantity
+Passed: Negative fill threw expected exception
+Passed: Over-filling through multiple fills threw expected exception
+
+--- Test 14: Trade Validation ---
+Passed: Trade executed
+Passed: Trade executed at sell price (better price)
+Passed: Trade executed at sell price (better price)
+Passed: Trade quantity correct
+Passed: Trade quantity correct
+Passed: Zero quantity sell order threw exception
+Passed: Zero quantity buy order threw exception
+Passed: Trade executed with price improvement
+Passed: Buy order traded at better price
+Passed: Sell order traded at better price
+
+--- Test 15: Order State Validation ---
+Passed: Initial quantity correct
+Passed: Remaining quantity equals initial
+Passed: Filled quantity is zero
+Passed: Order is not filled initially
+Passed: Order added to book
+Passed: Trade executed
+Passed: Order partially filled
+Passed: Filled quantity updated
+Passed: Order not completely filled
+Passed: Trade executed
+Passed: Order completely filled
+Passed: Filled quantity equals initial
+Passed: Order is filled
+Passed: Order removed from book after cancellation
+Passed: Initial quantity equals remaining plus filled
+
+--- Test 16: Performance Tracking ---
+Passed: Performance tracking enabled
+Passed: All orders added
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Order book has levels
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Size is non-negative
+Passed: Performance tracking still enabled
+Performance test completed. Check the performance report above.
+
+=== TEST RESULTS ===
+Passed tests: 294
+Passed all tests
+
+=== PERFORMANCE REPORT ===
+           Operation       CallsTotal Time (ms) Avg Time (μs) Min Time (μs) Max Time (μs)    Orders/Call
+---------------------------------------------------------------------------------------------------------
+CancelOrder_NotFound          60              0              0              0              0              0
+ MatchOrder_NotFound          30              0              0              0              0              0
+                Size         101              0              0              0              0              0
+  MatchOrder_Success          70              0              2              1              3              1
+       GetOrderInfos          50              0              1              0             16            610
+    AddOrder_Success        1570              2              1              0             11              1
+ CancelOrder_Success         210              0              0              0              0              1
+         MatchOrders        1570              2              1              0             10              0
+
+
+=== PERFORMANCE SUMMARY ===
+Total Operations: 3661
+Total Time: 4 ms
+Average Time per Operation: 0 ms
+Operations per Second: 915250
+

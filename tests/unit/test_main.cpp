@@ -13,7 +13,7 @@ private:
     int passedTests = 0;
 
     void resetOrderBook() {
-        orderbook = OrderBook();
+        orderbook.clear();
     }
 
     void assertTrue(bool condition, const std::string& testName) {

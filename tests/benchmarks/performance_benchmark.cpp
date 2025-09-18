@@ -70,8 +70,9 @@ private:
     void testOrderMatching() {
         std::cout << "Test 2: Order matching stress test" << std::endl;
         
-        orderbook_ = OrderBook();
-        orderbook_.enablePerformanceTracking(true);
+        // Clear order book for clean test
+        orderbook_.clear();
+        orderbook_.resetPerformanceMetrics();
         
         auto startTime = std::chrono::high_resolution_clock::now();
         
@@ -108,8 +109,9 @@ private:
     void testMixedOperations() {
         std::cout << "Test 3: Mixed operations (add, modify, cancel)" << std::endl;
         
-        orderbook_ = OrderBook();
-        orderbook_.enablePerformanceTracking(true);
+        // Clear order book for clean test
+        orderbook_.clear();
+        orderbook_.resetPerformanceMetrics();
         
         auto startTime = std::chrono::high_resolution_clock::now();
         
@@ -148,8 +150,9 @@ private:
     void testLargeOrderBook() {
         std::cout << "Test 4: Large order book operations" << std::endl;
         
-        orderbook_ = OrderBook();
-        orderbook_.enablePerformanceTracking(true);
+        // Clear order book for clean test
+        orderbook_.clear();
+        orderbook_.resetPerformanceMetrics();
         
         auto startTime = std::chrono::high_resolution_clock::now();
         
